@@ -1,0 +1,121 @@
+---
+services:
+  gluetun:
+    image: qmcgaw/gluetun
+    container_name: gluetun
+    # line above must be uncommented to allow external containers to connect.
+    # See https://github.com/qdm12/gluetun-wiki/blob/main/setup/connect-a-container-to-gluetun.md#external-container-to-gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - 8080:8080/tcp # qbittorrent webui
+      - 6881:6881/tcp # qbittorrent torrent
+      - 6881:6881/udp # qbittorrent torrent
+      - 8989:8989 #sonarr
+      - 7878:7878 #radarr
+      - 5055:5055 #overseerr
+      - 9117:9117 #jackett
+    volumes:
+      - /volume1/docker/gluetun:/docker/gluetun
+    environment:
+      # See https://github.com/qdm12/gluetun-wiki/tree/main/setup#setup
+      - VPN_SERVICE_PROVIDER=nordvpn    
+      - VPN_TYPE=openvpn
+      # OpenVPN:
+      - OPENVPN_USER=
+      - OPENVPN_PASSWORD=
+      - server_countries=US Central
+      # Wireguard:
+      # - WIREGUARD_PRIVATE_KEY=
+      # - WIREGUARD_ADDRESSES=
+      # Timezone for accurate log times
+      - TZ=US/Central
+      # Server list updater
+      # See https://github.com/qdm12/gluetun-wiki/blob/main/setup/servers.md#update-the-vpn-servers-list
+      - UPDATER_PERIOD=24h
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=US/Central
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=6881
+    volumes:
+      - /shared folder/ docker/qbittorrent/config
+      - /volume1/Plex/downloads:/Plex/downloads
+    depends_on:
+     - gluetun
+    restart: unless-stopped
+  jackett:
+    image: lscr.io/linuxserver/jackett:latest
+    container_name: jackett
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Etc/UTC
+      - WEBUI_PORT=9117
+      - AUTO_UPDATE=true #optional
+      - RUN_OPTS= #optional
+    volumes:
+      - /shared folder/docker/jackett/config
+      - /shared folder/docker/jackett/downloads
+    depends_on:
+     - gluetun
+    restart: unless-stopped
+    
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - WEBUI_PORT=8989
+      - TZ=US/Central
+    volumes:
+      - /volume1/docker/Sonarr:/config
+      - /volume1/Plex/TV Shows:/Plex/TV Shows
+      - /volume1/Plex/downloads:/Plex/downloads
+    depends_on:
+     - gluetun
+    restart: unless-stopped
+    
+  radarr:
+    image: lscr.io/linuxserver/radarr:latest
+    container_name: radarr
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - WEBUI_PORT=7878
+      - TZ=Etc/UTC
+    volumes:
+      - /shared folder/docker/radarr/config
+      - /volume1/Plex/Movies:/Plex/Movies
+      - /volume1/Plex/downloads:/Plex/downloads
+      - /volume1/Plex/downloads/completed-torrents:/Plex/downloads/competed-torrents
+    depends_on:
+     - gluetun
+    restart: unless-stopped
+    
+  overseerr:
+    image: lscr.io/linuxserver/overseerr:latest
+    container_name: overseerr
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - WEBUI_PORT=5055
+      - TZ=US/Central
+    volumes:
+      - /shared folder/docker/overseerr/config/
+    depends_on:
+     - gluetun
+    restart: unless-stopped
